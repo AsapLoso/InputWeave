@@ -2,9 +2,9 @@
 
 **Experimental opt-in forwarding middleware for selected Python browser and desktop automation libraries.**
 
-Use a familiar library interface through an InputWeave import path. Unchanged function calls print their name and delegate to the real library. Future adapters can selectively override individual methods.
+Use a familiar library interface through an InputWeave import path. Unchanged function calls print their name and delegate to the real library. Registered handlers can selectively route methods elsewhere; unregistered calls use the original backend.
 
-> **Status (2026-10-16): forwarding-only prototype, not production-ready.** There are no custom interaction overrides or anti-detection features.
+> **Status (2026-10-16): forwarding-only prototype, not production-ready.** A minimal handler registry is implemented, but no custom interaction algorithms or anti-detection features are bundled.
 
 ## Scope
 
@@ -84,6 +84,31 @@ Every unchanged function call prints a message and then calls the real PyAutoGUI
 
 **Current limitation:** reading attributes and calling functions are supported, but writing PyAutoGUI's mutable module settings such as `PAUSE` via the InputWeave module is **not** transparently forwarded. Nor is the module guaranteed to support every unusual import or type-introspection pattern.
 
+## Route a method through another implementation
+
+An explicit override registry can route an intercepted command to your own implementation or an existing library. Nothing is changed by default.
+
+```python
+from inputweave import register_override, unregister_override
+from inputweave.playwright.sync_api import sync_playwright
+
+def custom_click(original_click, x, y, **kwargs):
+    # Delegate to the native backend, or call another permitted input backend.
+    return original_click(x, y, **kwargs)
+
+register_override("Mouse.click", custom_click)
+try:
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.mouse.click(100, 100)  # custom_click receives this call
+        browser.close()
+finally:
+    unregister_override("Mouse.click")
+```
+
+Handlers receive the original callable first, followed by its arguments. Asynchronous overrides can be `async def` functions. Other methods continue printing `Unchanged feature: ...` on every call. Handler registration is process-global at present, and class-specific keys such as `Mouse.click` apply to all proxied objects of that class. **There is no per-context isolation or thread-safety guarantee yet.**
+
 ## Implementation
 
 InputWeave reuses [wrapt](https://github.com/GrahamDumpleton/wrapt) for Playwright object proxies and function wrappers rather than rebuilding object descriptor behavior in Python. Playwright context-manager entry/exit requires a small adapter.
@@ -92,7 +117,7 @@ Per-call passthrough messages are **intentional and on by default**. The wrapper
 
 ## Verification
 
-- 11 unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
+- 14 unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
 - Two optional real Chromium tests passed locally: sync locator click and async mouse click.
 - Run the optional browser checks with a system Chromium executable:
 
@@ -106,7 +131,7 @@ Playwright compatibility remains incomplete, particularly special methods, event
 
 1. Expand Playwright compatibility tests (events, callbacks, locator context managers, browser exceptions).
 2. Evaluate a more complete PyAutoGUI module proxy for mutable module settings.
-3. Add a selective override registry **after** passthrough semantics are reliable.
+3. Improve the initial override registry: configuration, context-scoped isolation, and API compatibility tests.
 4. Evaluate a pynput adapter without breaking controller class semantics.
 
 See [STATE.md](STATE.md) for project state and the explicitly low-priority GitHub-description TODO.
