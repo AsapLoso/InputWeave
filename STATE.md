@@ -36,6 +36,13 @@ Updated: 2026-10-16
 3. Harden the basic override registry (context-scoping / concurrency and error semantics); current motion preset is process-global.
 4. Investigate optional curved-path generators without import-time global side effects; keep pynput as a separate evaluation.
 
+## CI hygiene — 2026-10-16
+
+- **Cause of notification noise:** 29 push-triggered workflow runs during early implementation, with 6 historical failures. Four failed before `wrapt` was declared; two failed before the motion dependency `pytweening` was installed in CI. Both dependencies are now configured and the subsequent runs passed.
+- **Fix:** `.github/workflows/tests.yml` now ignores README/state-only pushes, limits branch push builds to `main`, and cancels superseded runs on the same ref. Keep the three Python-version checks.
+- **Working rule:** stage a coherent vertical slice and commit/push its files **atomically**; do not commit one file at a time while the repository is in a temporarily inconsistent state. Run tests before pushing when practical.
+- Historical GitHub Actions failures remain visible; their emails may already have been sent. Don't disable all CI or failure notifications to conceal genuine future failures.
+
 ## Very low priority — quick maintenance (approx. 2 minutes)
 
 - [ ] **P4 / cosmetic:** Update GitHub repository short **About** description only when convenient; leave it unchanged for now. Proposed: `Opt-in forwarding middleware for Playwright Python and PyAutoGUI; selective overrides planned.`
