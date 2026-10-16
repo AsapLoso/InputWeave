@@ -1,50 +1,11 @@
-"""Small forwarding proxy for Playwright objects (prototype, not full fidelity)."""
+"""Forward Playwright objects through wrapt rather than rewriting their proxy semantics."""
 
 from __future__ import annotations
 
-import functools
 import inspect
 from typing import Any
 
-
-class ForwardProxy:
-    """Forward attribute access and log each unchanged method invocation."""
-
-    def __init__(self, target: Any):
-        object.__setattr__(self, "_iw_target", target)
-
-    @property
-    def __wrapped__(self) -> Any:
-        return self._iw_target
-
-    def __getattr__(self, name: str) -> Any:
-        target = object.__getattribute__(self, "_iw_target")
-        value = getattr(target, name)  # Preserve AttributeError for missing names.
-        if not callable(value):
-            return forward_result(value)
-        if inspect.isclass(value):
-            return value
-        label = f"{type(target).__name__}.{name}"
-        if inspect.iscoroutinefunction(value):
-            @functools.wraps(value)
-            async def async_forward(*args: Any, **kwargs: Any) -> Any:
-                print(f"[InputWeave] Unchanged feature: {label}")
-                result = await value(*_unwrap(args), **_unwrap(kwargs))
-                return forward_result(result)
-            return async_forward
-
-        @functools.wraps(value)
-        def forward(*args: Any, **kwargs: Any) -> Any:
-            print(f"[InputWeave] Unchanged feature: {label}")
-            result = value(*_unwrap(args), **_unwrap(kwargs))
-            return forward_result(result)
-        return forward
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        setattr(self._iw_target, name, _unwrap(value))
-
-    def __repr__(self) -> str:
-        return f"ForwardProxy({self._iw_target!r})"
+import wrapt
 
 
 def _unwrap(value: Any) -> Any:
@@ -59,14 +20,48 @@ def _unwrap(value: Any) -> Any:
     return value
 
 
+def forwarding_function(original: Any, label: str, *, wrap_result: bool = True) -> Any:
+    """Create a bound-method-aware wrapper once; print on *each invocation*."""
+
+    if inspect.iscoroutinefunction(original):
+        async def call(wrapped: Any, instance: Any, args: tuple, kwargs: dict) -> Any:
+            print(f"[InputWeave] Unchanged feature: {label}")
+            result = await wrapped(*_unwrap(args), **_unwrap(kwargs))
+            return forward_result(result) if wrap_result else result
+    else:
+        def call(wrapped: Any, instance: Any, args: tuple, kwargs: dict) -> Any:
+            print(f"[InputWeave] Unchanged feature: {label}")
+            result = wrapped(*_unwrap(args), **_unwrap(kwargs))
+            return forward_result(result) if wrap_result else result
+
+    return wrapt.FunctionWrapper(original, call)
+
+
+class ForwardProxy(wrapt.ObjectProxy):
+    """A wrapt-backed adapter: nested API objects and methods remain proxied."""
+
+    def __getattribute__(self, name: str) -> Any:
+        result = super().__getattribute__(name)
+        if name in {"__wrapped__", "__class__", "__dict__", "__weakref__"} or name.startswith("_self_"):
+            return result
+        if inspect.isclass(result):
+            return result
+        if callable(result):
+            label = f"{type(self.__wrapped__).__name__}.{name}"
+            return forwarding_function(result, label)
+        return forward_result(result)
+
+
 def forward_result(value: Any) -> Any:
-    """Only proxy Playwright API objects; preserve ordinary Python values."""
+    """Recursively wrap Playwright API objects but leave Python values intact."""
     if isinstance(value, ForwardProxy):
         return value
     if isinstance(value, list):
         return [forward_result(x) for x in value]
     if isinstance(value, tuple):
         return tuple(forward_result(x) for x in value)
+    if isinstance(value, dict):
+        return {k: forward_result(v) for k, v in value.items()}
     module = type(value).__module__
     if module.startswith(("playwright.sync_api", "playwright.async_api")):
         return ForwardProxy(value)
