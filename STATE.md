@@ -10,7 +10,7 @@ Updated: 2026-10-16
 - **wrapt**: established library now supplies function wrappers and object proxies, avoiding bespoke descriptors and special-method proxy code.
 - **Per-call logging**: unchanged functions print `[InputWeave] Unchanged feature: …` on every invocation.
 - **Local verification**: 14 unit tests pass; two optional real Chromium tests pass (sync locator click and async mouse click).
-- **Explicit routing registry**: register/unregister handlers by method label (e.g. \`Mouse.click\` or \`pyautogui.click\`); unregistered calls forward with per-call logs. No bundled custom motion implementation, no bot-evasion features, no full API compatibility guarantee.
+- **Explicit routing registry**: register/unregister handlers by method label (e.g. `Mouse.click` or `pyautogui.click`); unregistered calls forward with per-call logs. No bundled custom motion implementation, no bot-evasion features, no full API compatibility guarantee.
 
 ## Known limitations
 
