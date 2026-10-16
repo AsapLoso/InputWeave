@@ -2,11 +2,11 @@
 
 Updated: 2026-10-16
 
-## ICE / InputWeave north star
+## InputWeave goal — keep it in sight
 
 **Goal:** a small, reusable, opt-in, import-prefix-compatible middleware for a **known and limited list of Python GUI/browser automation libraries**. Do not rebuild existing motion/input libraries. Forward every unchanged method through its native backend while printing one passthrough message **per call**; let registered overrides delegate selected calls to established third-party libraries. Preserve native semantics, async behavior and failure modes wherever feasible.
 
-**Reorientation rule:** At the start of each further engineering session, read this section and check whether changes reduce duplicated code, maintain import compatibility, and keep unsupported libraries explicitly out of scope. Update this state after verified milestones. This is an ongoing engineering practice, **not a scheduled background task**.
+**Working habit:** Keep an eye on this goal. At the start of a development session and periodically during substantial changes, reread it and check whether changes reduce duplicated code, maintain import compatibility, and keep unsupported libraries explicitly out of scope. Update this state after verified milestones. This is an ongoing engineering habit, **not a scheduled background task or a project named ICE**.
 
 ## Current implementation (experimental)
 
