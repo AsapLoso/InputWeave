@@ -1,24 +1,22 @@
 # InputWeave
 
-**Experimental, opt-in middleware for selected Python browser and desktop automation libraries.**
+**Experimental opt-in forwarding middleware for selected Python browser and desktop automation libraries.**
 
-InputWeave aims to keep a library's familiar interface while routing selected calls through middleware. Calls without an override print a passthrough message and then use the original library.
+Use a familiar library interface through an InputWeave import path. Unchanged function calls print their name and delegate to the real library. Future adapters can selectively override individual methods.
 
-> **Status (2026-10-16): early forwarding-only prototype.** Only a Playwright Python adapter exists so far; compatibility is partial and browser interaction is not yet validated. There are no custom interaction overrides.
+> **Status (2026-10-16): forwarding-only prototype, not production-ready.** There are no custom interaction overrides or anti-detection features.
 
-## Supported scope
+## Scope
 
-| Library | Status |
-| --- | --- |
-| [Playwright for Python](https://playwright.dev/python/) | **Initial forwarding-only prototype:** sync and async entry points; basic nested object forwarding |
-| [PyAutoGUI](https://pyautogui.readthedocs.io/) | **Not implemented; possible later adapter** |
-| [pynput](https://pynput.readthedocs.io/) | **Not implemented; possible later adapter** |
+| Library | Current support | Original backend |
+| --- | --- | --- |
+| [Playwright Python](https://playwright.dev/python/) | **Prototype:** synchronous and asynchronous entry points, nested browser/page/mouse/locator methods | Playwright |
+| [PyAutoGUI](https://pyautogui.readthedocs.io/) | **Prototype:** lazy-loading module functions and constants | PyAutoGUI |
+| [pynput](https://pynput.readthedocs.io/) | **Not implemented:** planned for evaluation | — |
 
-InputWeave **does not affect ordinary library imports**. Only scripts explicitly importing an `inputweave` adapter use it; unsupported libraries are unaffected.
+Only scripts **explicitly importing from InputWeave** are affected. Ordinary imports from the original packages remain unchanged. No arbitrary Python modules or desktop applications are modified.
 
-## Try the Playwright prototype
-
-Requires Python 3.10+:
+## Installation
 
 ```sh
 git clone https://github.com/AsapLoso/InputWeave.git
@@ -27,49 +25,88 @@ python -m pip install -e ".[test]"
 python -m pytest -q
 ```
 
-Change only the import in a conventional Playwright script:
+For PyAutoGUI, also install its optional backend dependency:
+
+```sh
+python -m pip install -e ".[desktop,test]"
+```
+
+PyAutoGUI requires a working graphical desktop; importing the InputWeave adapter itself does **not** require a display until you access a PyAutoGUI attribute.
+
+## Playwright example
+
+Change one import:
 
 ```python
-# Before:
+# Native:
 # from playwright.sync_api import sync_playwright
 
-# After:
+# InputWeave:
 from inputweave.playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:
-    print(p.chromium.name)
-    # Existing Playwright calls should forward through the adapter.
+    browser = p.chromium.launch()
+    page = browser.new_page()
+    page.goto("https://example.com")
+    print(page.title())
+    browser.close()
 ```
 
-For async code, use `from inputweave.playwright.async_api import async_playwright`.
+The async counterpart is `from inputweave.playwright.async_api import async_playwright`.
 
-Example console output:
+Sample output:
 
 ```text
 [InputWeave] Unchanged feature: sync_playwright
 [InputWeave] Unchanged feature: PlaywrightContextManager.__enter__
+[InputWeave] Unchanged feature: BrowserType.launch
+[InputWeave] Unchanged feature: Browser.new_page
+[InputWeave] Unchanged feature: Page.goto
+[InputWeave] Unchanged feature: Page.title
+[InputWeave] Unchanged feature: Browser.close
 [InputWeave] Unchanged feature: PlaywrightContextManager.__exit__
 ```
 
-The test suite uses real Playwright startup without launching a browser. Installing Playwright browsers is not necessary to run these smoke tests, but will be necessary for future end-to-end browser tests.
+## PyAutoGUI example
 
-## Current forwarding behavior
+```python
+# Native:
+# import pyautogui
 
-- Native Playwright sync and async context managers are available, including `.start()`.
-- Ordinary callable attributes on proxied Playwright objects print **on every call** and delegate to the original method.
-- Returned Playwright API objects are recursively proxied, including within lists and tuples.
-- Python values and attributes that are not callable generally pass through unchanged.
-- Underlying native exceptions propagate.
+# InputWeave:
+import inputweave.pyautogui as pyautogui
 
-**Known limitations:** A lightweight Python proxy is not perfectly type-transparent. It does not yet preserve every special method, event context manager, callback interaction, object identity, or Playwright class compatibility guarantee. There are no tests for live browser/page/locator interactions yet. Console output and Python wrappers add overhead; no performance benchmarking has been done. Do not assume full drop-in compatibility until these gaps are addressed.
+pyautogui.click(400, 250)
+pyautogui.write("Hello")
+```
 
-## Next milestones
+Every unchanged function call prints a message and then calls the real PyAutoGUI function. The adapter imports PyAutoGUI on first attribute access and caches function wrappers after the first lookup.
 
-1. Add tests against real browser/page/mouse/locator workflows, both sync and async.
-2. Evaluate whether `wrapt` improves type transparency and special-method forwarding; reuse existing tooling where it actually solves the compatibility gaps.
-3. Introduce a selective override registry **after** forwarding is proven.
-4. Consider additional library adapters only after the first is stable.
+**Current limitation:** reading attributes and calling functions are supported, but writing PyAutoGUI's mutable module settings such as `PAUSE` via the InputWeave module is **not** transparently forwarded. Nor is the module guaranteed to support every unusual import or type-introspection pattern.
 
-No stealth or anti-bot evasion functionality is planned.
+## Implementation
 
-See [STATE.md](STATE.md) for project status and the low-priority GitHub-description TODO.
+InputWeave reuses [wrapt](https://github.com/GrahamDumpleton/wrapt) for Playwright object proxies and function wrappers rather than rebuilding object descriptor behavior in Python. Playwright context-manager entry/exit requires a small adapter.
+
+Per-call passthrough messages are **intentional and on by default**. The wrappers add Python overhead and printing can be especially costly for very cheap methods. This has not been benchmarked.
+
+## Verification
+
+- 11 unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
+- Two optional real Chromium tests passed locally: sync locator click and async mouse click.
+- Run the optional browser checks with a system Chromium executable:
+
+```sh
+INPUTWEAVE_BROWSER_SMOKE=1 python -m pytest tests/test_browser_smoke.py
+```
+
+Playwright compatibility remains incomplete, particularly special methods, events, callbacks, object identity, and nontrivial context managers. The current browser tests are only a narrow smoke check.
+
+## Roadmap
+
+1. Expand Playwright compatibility tests (events, callbacks, locator context managers, browser exceptions).
+2. Evaluate a more complete PyAutoGUI module proxy for mutable module settings.
+3. Add a selective override registry **after** passthrough semantics are reliable.
+4. Evaluate a pynput adapter without breaking controller class semantics.
+
+See [STATE.md](STATE.md) for project state and the explicitly low-priority GitHub-description TODO.
