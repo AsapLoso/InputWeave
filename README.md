@@ -147,7 +147,7 @@ Per-call passthrough messages are **intentional and on by default**. The wrapper
 
 ## Verification
 
-- Initial unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
+- GitHub Actions: **22 passed, 1 optional browser test module skipped** on Python 3.10, 3.11, and 3.12. Coverage includes the PyTweening motion preset with a fake PyAutoGUI backend, Playwright sync/async startup, and override restoration.
 - Two optional real Chromium tests passed locally: sync locator click and async mouse click.
 - Run the optional browser checks with a system Chromium executable:
 
