@@ -2,30 +2,39 @@
 
 Updated: 2026-10-16
 
+## ICE / InputWeave north star
+
+**Goal:** a small, reusable, opt-in, import-prefix-compatible middleware for a **known and limited list of Python GUI/browser automation libraries**. Do not rebuild existing motion/input libraries. Forward every unchanged method through its native backend while printing one passthrough message **per call**; let registered overrides delegate selected calls to established third-party libraries. Preserve native semantics, async behavior and failure modes wherever feasible.
+
+**Reorientation rule:** At the start of each further engineering session, read this section and check whether changes reduce duplicated code, maintain import compatibility, and keep unsupported libraries explicitly out of scope. Update this state after verified milestones. This is an ongoing engineering practice, **not a scheduled background task**.
+
 ## Current implementation (experimental)
 
-- Public standalone Python repository; version label `0.0.2` in source (not published to PyPI).
+- Public standalone Python repository; version label `0.0.3` in source (not published to PyPI).
 - **Playwright Python**: sync/async import-prefix adapters; nested browser/page/mouse/locator passthrough; special start/context-manager entry points.
 - **PyAutoGUI**: opt-in, lazy module-function passthrough via `inputweave.pyautogui`; original PyAutoGUI remains the backend; requires actual desktop on use.
+- **PyTweening**: optional integration for eased PyAutoGUI move/drag calls, via native PyAutoGUI duration/tween parameters; defaults only inside an explicit context; preserves pre-existing overrides.
 - **wrapt**: established library now supplies function wrappers and object proxies, avoiding bespoke descriptors and special-method proxy code.
 - **Per-call logging**: unchanged functions print `[InputWeave] Unchanged feature: …` on every invocation.
 - **Local verification**: 14 unit tests pass; two optional real Chromium tests pass (sync locator click and async mouse click).
-- **Explicit routing registry**: register/unregister handlers by method label (e.g. `Mouse.click` or `pyautogui.click`); unregistered calls forward with per-call logs. No bundled custom motion implementation, no bot-evasion features, no full API compatibility guarantee.
+- **Explicit routing registry**: register/unregister handlers by method label (e.g. `Mouse.click` or `pyautogui.click`); unregistered calls forward with per-call logs. PyTweening movement easing preset with native PyAutoGUI execution (opt-in; no curved-path generator), no bot-evasion features, no full API compatibility guarantee.
 
 ## Known limitations
 
 - Playwright proxy methods are created on attribute access; wrappers are not globally installed once for every nested method.
 - Event context managers, callbacks, instance identity, special methods, and full browser behavior need further testing.
+- Motion preset is tested with a fake desktop backend only; no physical mouse verification yet.
 - PyAutoGUI module-level mutable settings (e.g. `PAUSE`) are not forwarded on assignment; desktop interaction hasn't been tested here on a real OS desktop.
 - pynput adapter is **not implemented**; controller type identity needs deliberate design.
-- Overrides are currently global to the interpreter and not isolated by session or thread; no concurrency guarantees.\n- wrapt does not eliminate Python logging cost.
+- Overrides are currently global to the interpreter and not isolated by session or thread; no concurrency guarantees.
+- wrapt does not eliminate Python logging cost.
 
 ## Next steps
 
 1. Broaden sync/async Playwright browser integration coverage; pay special attention to callback, event, special-method semantics.
 2. Choose a safe mutable-setting strategy for PyAutoGUI; test actual desktop backend when available.
-3. Harden the basic override registry (context-scoping / concurrency and error semantics) before third-party motion backends.
-4. Evaluate pynput as a separate adapter rather than implying unsupported functionality exists.
+3. Harden the basic override registry (context-scoping / concurrency and error semantics); current motion preset is process-global.
+4. Investigate optional curved-path generators without import-time global side effects; keep pynput as a separate evaluation.
 
 ## Very low priority — quick maintenance (approx. 2 minutes)
 
