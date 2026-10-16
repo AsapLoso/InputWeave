@@ -4,14 +4,14 @@
 
 Use a familiar library interface through an InputWeave import path. Unchanged function calls print their name and delegate to the real library. Registered handlers can selectively route methods elsewhere; unregistered calls use the original backend.
 
-> **Status (2026-10-16): forwarding-only prototype, not production-ready.** A minimal handler registry is implemented, but no custom interaction algorithms or anti-detection features are bundled.
+> **Status (2026-10-16): forwarding and optional motion-preset prototype, not production-ready.** An override registry and a PyTweening-backed PyAutoGUI movement preset are available. No custom trajectory generator or anti-detection features are bundled.
 
 ## Scope
 
 | Library | Current support | Original backend |
 | --- | --- | --- |
 | [Playwright Python](https://playwright.dev/python/) | **Prototype:** synchronous and asynchronous entry points, nested browser/page/mouse/locator methods | Playwright |
-| [PyAutoGUI](https://pyautogui.readthedocs.io/) | **Prototype:** lazy-loading module functions and constants | PyAutoGUI |
+| [PyAutoGUI](https://pyautogui.readthedocs.io/) | **Prototype:** lazy-loading module functions and constants; optional eased movement/dragging | PyAutoGUI |
 | [pynput](https://pynput.readthedocs.io/) | **Not implemented:** planned for evaluation | — |
 
 Only scripts **explicitly importing from InputWeave** are affected. Ordinary imports from the original packages remain unchanged. No arbitrary Python modules or desktop applications are modified.
@@ -84,6 +84,36 @@ Every unchanged function call prints a message and then calls the real PyAutoGUI
 
 **Current limitation:** reading attributes and calling functions are supported, but writing PyAutoGUI's mutable module settings such as `PAUSE` via the InputWeave module is **not** transparently forwarded. Nor is the module guaranteed to support every unusual import or type-introspection pattern.
 
+## Optional motion integration (PyAutoGUI + PyTweening)
+
+The first movement layer **reuses existing libraries**, rather than writing a trajectory engine: [PyTweening](https://github.com/asweigart/pytweening) provides easing functions, and **native PyAutoGUI** performs the actual movement or drag.
+
+```sh
+python -m pip install -e ".[desktop,motion,test]"
+```
+
+```python
+import inputweave.pyautogui as pyautogui
+from inputweave.motion import eased_pyautogui_moves
+
+# Opt-in defaults; ordinary calls remain native.
+with eased_pyautogui_moves(duration=0.3, curve="easeInOutSine"):
+    pyautogui.moveTo(400, 250)
+    pyautogui.moveRel(20, 10)
+    pyautogui.dragTo(450, 300)
+
+# Outside the context, native forwarding with per-call print resumes.
+pyautogui.moveTo(500, 300)
+```
+
+Within the context, InputWeave routes `moveTo`, `moveRel`, `dragTo`, and `dragRel` through a registered override that supplies `duration` and `tween`. **Explicit parameters win** over those defaults. On exit, previous handlers are restored, including if an exception occurs. There are no global PyAutoGUI setting changes.
+
+The feature has been unit-tested with a stub PyAutoGUI backend, **not against a real graphical desktop**. It produces eased *straight-line* movement, not Bézier curves or Perlin noise. The initial scope is deliberately limited and does **not** alter Playwright mouse calls.
+
+**Dependency choice:** [PyClick](https://github.com/patrikoss/pyclick) offers curved mouse trajectories, but its import initializes PyAutoGUI and changes its global timing variables, making it a poor fit for an unobtrusive default. It could be revisited behind strict isolation later.
+
+**Concurrency warning:** InputWeave's override registry is process-global; simultaneous or overlapping motion contexts across threads are currently unsupported.
+
 ## Route a method through another implementation
 
 An explicit override registry can route an intercepted command to your own implementation or an existing library. Nothing is changed by default.
@@ -117,7 +147,7 @@ Per-call passthrough messages are **intentional and on by default**. The wrapper
 
 ## Verification
 
-- 14 unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
+- Initial unit/smoke tests pass locally, including Playwright sync/async startup, nested method forwarding, exception behavior, and PyAutoGUI delegation with a fake backend.
 - Two optional real Chromium tests passed locally: sync locator click and async mouse click.
 - Run the optional browser checks with a system Chromium executable:
 
@@ -132,6 +162,6 @@ Playwright compatibility remains incomplete, particularly special methods, event
 1. Expand Playwright compatibility tests (events, callbacks, locator context managers, browser exceptions).
 2. Evaluate a more complete PyAutoGUI module proxy for mutable module settings.
 3. Improve the initial override registry: configuration, context-scoped isolation, and API compatibility tests.
-4. Evaluate a pynput adapter without breaking controller class semantics.
+4. Add an optional *curved-path* backend only if a library can be integrated without global desktop side effects; evaluate a pynput adapter separately.
 
 See [STATE.md](STATE.md) for project state and the explicitly low-priority GitHub-description TODO.
