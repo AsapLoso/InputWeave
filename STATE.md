@@ -16,7 +16,7 @@ Updated: 2026-10-16
 - **PyTweening**: optional integration for eased PyAutoGUI move/drag calls, via native PyAutoGUI duration/tween parameters; defaults only inside an explicit context; preserves pre-existing overrides.
 - **wrapt**: established library now supplies function wrappers and object proxies, avoiding bespoke descriptors and special-method proxy code.
 - **Per-call logging**: unchanged functions print `[InputWeave] Unchanged feature: …` on every invocation.
-- **Local verification**: 14 unit tests pass; two optional real Chromium tests pass (sync locator click and async mouse click).
+- **Verification**: GitHub Actions reports **22 passed, 1 skipped** on Python 3.10, 3.11, and 3.12. The skipped module contains optional real-Chromium tests. Prior local checks recorded two real Chromium smoke passes; the new motion preset is tested against a fake PyAutoGUI backend only.
 - **Explicit routing registry**: register/unregister handlers by method label (e.g. `Mouse.click` or `pyautogui.click`); unregistered calls forward with per-call logs. PyTweening movement easing preset with native PyAutoGUI execution (opt-in; no curved-path generator), no bot-evasion features, no full API compatibility guarantee.
 
 ## Known limitations
