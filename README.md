@@ -1,64 +1,75 @@
 # InputWeave
 
-**Selective, drop-in interception for supported Python GUI and browser automation libraries.**
+**Experimental, opt-in middleware for selected Python browser and desktop automation libraries.**
 
-InputWeave aims to let a script keep using a familiar automation-library API while routing selected calls through a middleware layer. Methods without an override are forwarded to the original library and print a short passthrough message.
+InputWeave aims to keep a library's familiar interface while routing selected calls through middleware. Calls without an override print a passthrough message and then use the original library.
 
-> **Status: concept / initial design.** This repository does not yet contain a working Python package or a verified drop-in adapter.
+> **Status (2026-10-16): early forwarding-only prototype.** Only a Playwright Python adapter exists so far; compatibility is partial and browser interaction is not yet validated. There are no custom interaction overrides.
 
-## Scope: opt-in and library-specific
+## Supported scope
 
-InputWeave is **not** a system-wide input hook, a replacement for every Python import, or a general-purpose wrapper around arbitrary software. It only affects code that explicitly imports an InputWeave adapter for a **supported library**.
+| Library | Status |
+| --- | --- |
+| [Playwright for Python](https://playwright.dev/python/) | **Initial forwarding-only prototype:** sync and async entry points; basic nested object forwarding |
+| [PyAutoGUI](https://pyautogui.readthedocs.io/) | **Not implemented; possible later adapter** |
+| [pynput](https://pynput.readthedocs.io/) | **Not implemented; possible later adapter** |
 
-| Library | Scope | Status |
-| --- | --- | --- |
-| [Playwright for Python](https://playwright.dev/python/) | Browser automation; first target, including nested page/mouse/locator APIs and sync/async compatibility | **Planned; not implemented** |
-| [PyAutoGUI](https://pyautogui.readthedocs.io/) | Desktop mouse and keyboard controls | **Possible later adapter; not implemented** |
-| [pynput](https://pynput.readthedocs.io/) | Desktop input controllers | **Possible later adapter; not implemented** |
+InputWeave **does not affect ordinary library imports**. Only scripts explicitly importing an `inputweave` adapter use it; unsupported libraries are unaffected.
 
-Other libraries remain **out of scope unless an adapter is added**. Installing InputWeave alone should not modify the behavior of ordinary Playwright, PyAutoGUI, or pynput imports.
+## Try the Playwright prototype
 
-## Intended usage
+Requires Python 3.10+:
 
-The goal is to **change the import, not the calls**.
+```sh
+git clone https://github.com/AsapLoso/InputWeave.git
+cd InputWeave
+python -m pip install -e ".[test]"
+python -m pytest -q
+```
+
+Change only the import in a conventional Playwright script:
 
 ```python
-# Native Playwright
-from playwright.sync_api import sync_playwright
+# Before:
+# from playwright.sync_api import sync_playwright
 
-# Proposed InputWeave replacement (illustrative; NOT implemented yet)
+# After:
 from inputweave.playwright.sync_api import sync_playwright
-```
 
-The rest of a Playwright script would ideally remain unchanged:
-
-```python
 with sync_playwright() as p:
-    browser = p.chromium.launch()
-    page = browser.new_page()
-    page.goto("https://example.com")
-    page.mouse.click(400, 250)
-    print(page.title())
-    browser.close()
+    print(p.chromium.name)
+    # Existing Playwright calls should forward through the adapter.
 ```
 
-## Behavior contract (proposed)
+For async code, use `from inputweave.playwright.async_api import async_playwright`.
 
-1. **Override:** When InputWeave has an override for a supported method, invoke it while preserving the original API's expected behavior.
-2. **Forward:** Otherwise, print a message such as `[InputWeave] Unchanged feature: Page.title` **on every call**, then delegate directly to the original method with the same arguments.
-3. **Preserve compatibility:** Retain return values, exceptions, method binding, sync/async behavior, and nested objects. Do not silently change semantics.
-4. **Opt in:** Native library imports continue to behave normally; only InputWeave-prefixed imports take this path.
+Example console output:
 
-The wrappers can be created once during adapter initialization, avoiding repeated discovery or patch setup. Each forwarded call still incurs some Python wrapper overhead, and console printing may dominate the overhead of very fast native calls. No performance claims have been benchmarked yet.
+```text
+[InputWeave] Unchanged feature: sync_playwright
+[InputWeave] Unchanged feature: PlaywrightContextManager.__enter__
+[InputWeave] Unchanged feature: PlaywrightContextManager.__exit__
+```
 
-## First milestone
+The test suite uses real Playwright startup without launching a browser. Installing Playwright browsers is not necessary to run these smoke tests, but will be necessary for future end-to-end browser tests.
 
-Implement **forwarding-only** support for one library (Playwright for Python). Verify import-prefix substitution, nested objects, synchronous and asynchronous calls, error propagation, and the per-call passthrough print. **Do not add custom mouse trajectories or behavioral changes until transparent forwarding passes tests.**
+## Current forwarding behavior
 
-Potential implementation building blocks include [wrapt](https://github.com/GrahamDumpleton/wrapt) for transparent wrappers and [aspectlib](https://github.com/ionelmc/python-aspectlib) for weaving. These are candidates, not dependencies currently installed by this repository.
+- Native Playwright sync and async context managers are available, including `.start()`.
+- Ordinary callable attributes on proxied Playwright objects print **on every call** and delegate to the original method.
+- Returned Playwright API objects are recursively proxied, including within lists and tuples.
+- Python values and attributes that are not callable generally pass through unchanged.
+- Underlying native exceptions propagate.
 
-## Non-goals
+**Known limitations:** A lightweight Python proxy is not perfectly type-transparent. It does not yet preserve every special method, event context manager, callback interaction, object identity, or Playwright class compatibility guarantee. There are no tests for live browser/page/locator interactions yet. Console output and Python wrappers add overhead; no performance benchmarking has been done. Do not assume full drop-in compatibility until these gaps are addressed.
 
-- Automatically altering all Python libraries or existing scripts.
-- Promising compatibility with libraries for which no adapter exists.
-- Concealing automated access or bypassing websites' anti-bot restrictions.
+## Next milestones
+
+1. Add tests against real browser/page/mouse/locator workflows, both sync and async.
+2. Evaluate whether `wrapt` improves type transparency and special-method forwarding; reuse existing tooling where it actually solves the compatibility gaps.
+3. Introduce a selective override registry **after** forwarding is proven.
+4. Consider additional library adapters only after the first is stable.
+
+No stealth or anti-bot evasion functionality is planned.
+
+See [STATE.md](STATE.md) for project status and the low-priority GitHub-description TODO.
