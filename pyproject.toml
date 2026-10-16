@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inputweave"
-version = "0.0.1"
-description = "Experimental forwarding-only Playwright middleware"
+version = "0.0.2"
+description = "Experimental forwarding adapters for Playwright and PyAutoGUI"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["playwright>=1.40"]
+dependencies = ["playwright>=1.40", "wrapt>=1.16"]
 
 [project.optional-dependencies]
+desktop = ["pyautogui>=0.9.54"]
 test = ["pytest>=7"]
 
 [tool.setuptools.packages.find]
