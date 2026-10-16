@@ -7,6 +7,8 @@ from typing import Any
 
 import wrapt
 
+from inputweave.overrides import get_override
+
 
 def _unwrap(value: Any) -> Any:
     if isinstance(value, ForwardProxy):
@@ -25,13 +27,23 @@ def forwarding_function(original: Any, label: str, *, wrap_result: bool = True) 
 
     if inspect.iscoroutinefunction(original):
         async def call(wrapped: Any, instance: Any, args: tuple, kwargs: dict) -> Any:
-            print(f"[InputWeave] Unchanged feature: {label}")
-            result = await wrapped(*_unwrap(args), **_unwrap(kwargs))
+            override = get_override(label)
+            if override is None:
+                print(f"[InputWeave] Unchanged feature: {label}")
+                result = wrapped(*_unwrap(args), **_unwrap(kwargs))
+            else:
+                result = override(wrapped, *_unwrap(args), **_unwrap(kwargs))
+            if inspect.isawaitable(result):
+                result = await result
             return forward_result(result) if wrap_result else result
     else:
         def call(wrapped: Any, instance: Any, args: tuple, kwargs: dict) -> Any:
-            print(f"[InputWeave] Unchanged feature: {label}")
-            result = wrapped(*_unwrap(args), **_unwrap(kwargs))
+            override = get_override(label)
+            if override is None:
+                print(f"[InputWeave] Unchanged feature: {label}")
+                result = wrapped(*_unwrap(args), **_unwrap(kwargs))
+            else:
+                result = override(wrapped, *_unwrap(args), **_unwrap(kwargs))
             return forward_result(result) if wrap_result else result
 
     return wrapt.FunctionWrapper(original, call)
