@@ -91,3 +91,45 @@ def test_forward_preserves_exception(capsys):
     with pytest.raises(RuntimeError, match="backend error"):
         wrapped()
     assert "Unchanged feature: native" in capsys.readouterr().out
+
+def test_selective_route_and_restore(capsys):
+    from inputweave import register_override, unregister_override
+    page = forward_result(NestedPage())
+    calls = []
+
+    def custom_click(original, x, y):
+        calls.append((x, y))
+        return original(x + 1, y + 2)
+
+    register_override("NestedMouse.click", custom_click)
+    try:
+        assert page.mouse.click(2, 3) == (3, 5)
+        assert calls == [(2, 3)]
+        assert "Unchanged feature: NestedMouse.click" not in capsys.readouterr().out
+    finally:
+        unregister_override("NestedMouse.click")
+
+    assert page.mouse.click(2, 3) == (2, 3)
+    assert "Unchanged feature: NestedMouse.click" in capsys.readouterr().out
+
+
+def test_async_override(capsys):
+    from inputweave import register_override, unregister_override
+    mouse = forward_result(AsyncMouse())
+
+    async def handler(original, x, y):
+        await asyncio.sleep(0)
+        return await original(x * 2, y * 2)
+
+    register_override("AsyncMouse.click", handler)
+    try:
+        assert asyncio.run(mouse.click(2, 4)) == (4, 8)
+        assert "Unchanged feature: AsyncMouse.click" not in capsys.readouterr().out
+    finally:
+        unregister_override("AsyncMouse.click")
+
+
+def test_override_requires_callable():
+    from inputweave import register_override
+    with pytest.raises(TypeError):
+        register_override("test", None)
